@@ -1,0 +1,6 @@
+[submodule "3rdParty/VulkanMemoryAllocator"]
+	path = 3rdParty/VulkanMemoryAllocator
+	url = git@github.com:GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+[submodule "3rdparty/volk"]
+	path = 3rdparty/volk
+	url = git@github.com:zeux/volk.git
