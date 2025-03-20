@@ -14,6 +14,8 @@ set(SOURCE_FILE_LIST
 
     src/device.h
     src/device.cpp
+    src/image.h
+    src/image.cpp
 
     src/string_utils.h
     src/string_utils.cpp

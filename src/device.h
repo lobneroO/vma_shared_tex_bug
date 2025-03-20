@@ -15,6 +15,8 @@ public:
     Device();
     ~Device();
 
+    VkDevice getDevice() const;
+    VmaAllocator getAllocator() const;
 private:
     void setupInstance();
     void choosePhysicalDevice();
