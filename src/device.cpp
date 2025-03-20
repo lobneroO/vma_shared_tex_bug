@@ -183,7 +183,8 @@ void Device::choosePhysicalDevice()
 	{
 		// best candidate is a suitable one (since the score is >0)
 		physDevice = candidates.rbegin()->second;
-		setOptionalExtensionAvailability();
+        // TODO: probably unnecessary
+		// setOptionalExtensionAvailability();
 	}
 	else
 	{
@@ -444,22 +445,17 @@ bool Device::areRequiredDeviceExtensionsSupported(VkPhysicalDevice device) const
 	}
 	// disable ray tracing extension queries, if renderdoc is attached
 	// renderdoc disables them, so they can't be used
-	if (!VisVulkanUtils::isRenderDocAttached())
-	{
-		if (!areExtensionsSupported(device, RequiredRayTracingDeviceExtensions))
+	// if (!VisVulkanUtils::isRenderDocAttached())
+	// {
+		if (!renderOffscreenOnly 
+            && !VulkanUtils::areDeviceExtensionsAvailable(device, requiredOnScreenRenderingDeviceExtensions))
 		{
 			return false;
 		}
-		if (!RenderOffscreenOnly && !areExtensionsSupported(device, RequiredOnScreenRenderingDeviceExtensions))
-		{
-			return false;
-		}
-	}
+	// }
 	
-	if (EnableOptixInterop && !areExtensionsSupported(device, InteropDeviceExtensions))
+	if (!VulkanUtils::areDeviceExtensionsAvailable(device, interopDeviceExtensions))
 	{
-		// TODO: we can work around this by copying data manually (i.e. via the CPU)
-		// to the Vulkan Render Target
 		return false;
 	}
 	return true;

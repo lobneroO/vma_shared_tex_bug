@@ -44,7 +44,7 @@ find_package(Vulkan REQUIRED COMPONENTS shaderc_combined)
 message(${Vulkan_shaderc_combined_LIBRARY})
 string(REPLACE ".lib" "d.lib" SHADERC_DEBUG ${Vulkan_shaderc_combined_LIBRARY})
 
-IF(WIN32)
+IF(MSVC)
 	# the debug version of shaderc doesn't ship with .pdb files in the VulkanSDK
 	# therefore supress the warning about missing pdb files
     target_link_options(${PROJECT_NAME} PUBLIC "/ignore:4099")

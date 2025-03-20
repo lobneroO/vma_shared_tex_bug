@@ -50,6 +50,21 @@ private:
     */
     bool renderOffscreenOnly = true;
 
+
+	const std::vector<const char*> requiredDeviceExtensions = {
+		//VK_EXT_DEBUG_MARKER_EXTENSION_NAME
+	};
+	const std::vector<const char*> requiredOnScreenRenderingDeviceExtensions = {
+		VK_KHR_SWAPCHAIN_EXTENSION_NAME
+	};
+	const std::vector<const char*> interopDeviceExtensions = {
+#if _WIN32
+		VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME
+#else
+		VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME
+#endif
+	};
+
 	const std::vector<const char*> validationLayers = {
 		"VK_LAYER_KHRONOS_validation"
 	};
