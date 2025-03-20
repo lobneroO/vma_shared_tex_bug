@@ -1,5 +1,5 @@
-[submodule "3rdParty/VulkanMemoryAllocator"]
-	path = 3rdParty/VulkanMemoryAllocator
+[submodule "3rdparty/VulkanMemoryAllocator"]
+	path = 3rdparty/VulkanMemoryAllocator
 	url = git@github.com:GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
 [submodule "3rdparty/volk"]
 	path = 3rdparty/volk
