@@ -167,4 +167,67 @@ bool areDeviceExtensionsAvailable(VkPhysicalDevice device, const std::vector<con
 	return extensions.empty();
 }
 
+QueueFamilyIndices fetchQueues(VkPhysicalDevice device, VkSurfaceKHR surface)
+{
+	QueueFamilyIndices indices;
+
+	uint32_t queueFamilyCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+
+	std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+	int32_t i = 0;
+	for (int32_t i = 0; i < queueFamilyCount; i++)
+	{
+		if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+		{
+			indices.GraphicsFamily = i;
+		}
+
+		if (surface != VK_NULL_HANDLE)
+		{
+			// for querying presentation support, a surface is needed
+			// but the surface is only created, if we're not only rendering off screen
+			VkBool32 presentSupport = false;
+			vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+
+			if (presentSupport)
+			{
+				indices.PresentFamily = i;
+			}
+		}
+
+		if (indices.IsComplete())
+		{
+			// no need to look for more
+			break;
+		}
+	}
+	return indices;
+}
+
+void setDebugName(VkDevice device, uint64_t objectHandle,
+	VkObjectType objectType, const std::string& name)
+{
+	// the extension may not be enabled if not in debug
+	// TODO: allow for NDEBUG builds with this extension in use
+#ifndef NDEBUG
+	if (objectHandle != 0)
+	{
+		VkDebugUtilsObjectNameInfoEXT objNameInfo{};
+		objNameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+		objNameInfo.objectType = objectType;
+		objNameInfo.pObjectName = name.c_str();
+		objNameInfo.objectHandle = objectHandle;
+
+		vkSetDebugUtilsObjectNameEXT(device, &objNameInfo);
+	}
+	else
+	{
+        std::cerr << "Cannot give a name to a vulkan object that is VK_NULL_HANDLE!" << std::endl;
+	}
+#endif
+}
+
 }

@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include <map>
 #include <vector>
 
 #include <volk.h>
@@ -25,10 +26,15 @@ private:
     std::vector<const char*> getRequiredInstanceExtensions() const;
     bool areRequiredInstanceExtensionsAvailable(const std::vector<const char*>& requiredExtensions) const;
     bool areRequiredDeviceExtensionsSupported(VkPhysicalDevice device) const;
+    void enableAvailableOptionalDeviceExtensions(
+        std::vector<const char*>& deviceExtensions,
+        const std::map<const char*, bool>& optionalDeviceExtensions) const;
+
+    void fetchQueues();
 
 private:
     VkInstance instance = VK_NULL_HANDLE;
-    VkPhysicalDevice physDevice = VK_NULL_HANDLE;
+    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 	VkPhysicalDeviceProperties2 physicalDeviceProperties;
 	VkPhysicalDeviceMemoryProperties memoryProperties;
     VkDevice device = VK_NULL_HANDLE;
@@ -41,6 +47,8 @@ private:
 	VkExportMemoryAllocateInfo exportMemAllocInfo{};
 
     QueueFamilyIndices qfIndices;
+    VkQueue graphicsQueue = VK_NULL_HANDLE;
+    VkQueue presentQueue = VK_NULL_HANDLE; 
 
 	uint32_t vulkanApiVersion = 0;
 
@@ -63,6 +71,8 @@ private:
 #else
 		VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME
 #endif
+	};
+	std::map<const char*, bool> optionalDeviceExtensions = {
 	};
 
 	const std::vector<const char*> validationLayers = {

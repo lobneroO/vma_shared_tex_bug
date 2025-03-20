@@ -1,11 +1,11 @@
 
 #include "device.h"
 
+#include <cassert>
 #include <iostream>
 #include <map>
+#include <set>
 #include <stdexcept>
-
-#include "string_utils.h"
 
 namespace //debugging
 {
@@ -55,6 +55,7 @@ Device::Device()
     volkLoadInstance(instance);
     choosePhysicalDevice();
     createLogicalDevice();
+    setupVma();
 }
 
 Device::~Device()
@@ -182,7 +183,7 @@ void Device::choosePhysicalDevice()
 	if (candidates.rbegin()->first > 0)
 	{
 		// best candidate is a suitable one (since the score is >0)
-		physDevice = candidates.rbegin()->second;
+		physicalDevice = candidates.rbegin()->second;
         // TODO: probably unnecessary
 		// setOptionalExtensionAvailability();
 	}
@@ -193,8 +194,8 @@ void Device::choosePhysicalDevice()
 
 	// tell the user which device was chosen
 	VkPhysicalDeviceProperties deviceProps;
-	vkGetPhysicalDeviceProperties(physDevice, &deviceProps);
-    std::cout << "Using deviceProps.deviceName " << std::endl;
+	vkGetPhysicalDeviceProperties(physicalDevice, &deviceProps);
+    std::cout << "Using " << deviceProps.deviceName << std::endl;
 
 	// tell the user which devices are available, but are rejected
 	for (const auto& pair_scoreToDevice : candidates)
@@ -212,7 +213,7 @@ void Device::choosePhysicalDevice()
 		rtPipelineProps.pNext = &asProps;
 		vkGetPhysicalDeviceProperties2(candidate, &candidateProps);
 
-		if (candidate == physDevice)
+		if (candidate == physicalDevice)
 		{
 			// store the physical device properties such that 
 			// they don't have to be queried every time they are needed
@@ -221,7 +222,7 @@ void Device::choosePhysicalDevice()
             VkPhysicalDeviceMemoryProperties2 memoryProps{};
             // check that interop is actually possible
             memoryProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2;
-            vkGetPhysicalDeviceMemoryProperties2(physDevice, &memoryProps);
+            vkGetPhysicalDeviceMemoryProperties2(physicalDevice, &memoryProps);
             memoryProperties = memoryProps.memoryProperties;
 			continue;
 		}
@@ -310,7 +311,107 @@ uint32_t Device::ratePhysicalDevice(VkPhysicalDevice phyDevice) const
 
 void Device::createLogicalDevice()
 {
+	qfIndices = VulkanUtils::findQueueFamilies(physicalDevice, surface);
 
+	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+	std::set<uint32_t> uniqueQueueFamilies = {
+		qfIndices.GraphicsFamily.value(),
+	};
+	if (!renderOffscreenOnly)
+	{
+		uniqueQueueFamilies.insert(qfIndices.PresentFamily.value());
+	}
+	float queuePriority = 1.0f; // required, even if there is only one queue. 1.0f is highest priority
+
+	for (uint32_t queueFamily : uniqueQueueFamilies)
+	{
+		VkDeviceQueueCreateInfo queueCreateInfo{};
+		queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		queueCreateInfo.queueFamilyIndex = queueFamily;
+		queueCreateInfo.queueCount = 1;
+		queueCreateInfo.pQueuePriorities = &queuePriority;
+		queueCreateInfos.push_back(queueCreateInfo);
+	}
+	VkPhysicalDeviceFeatures deviceFeatures{};
+	deviceFeatures.samplerAnisotropy = VK_TRUE;
+
+	std::vector<const char*> deviceExtensions = requiredDeviceExtensions;
+	if (!renderOffscreenOnly)
+	{
+		deviceExtensions.insert(deviceExtensions.end(),
+			requiredOnScreenRenderingDeviceExtensions.begin(), requiredOnScreenRenderingDeviceExtensions.end());
+	}
+    deviceExtensions.insert(deviceExtensions.end(),
+        interopDeviceExtensions.begin(), interopDeviceExtensions.end());
+
+	enableAvailableOptionalDeviceExtensions(deviceExtensions, optionalDeviceExtensions);
+
+	VkPhysicalDeviceFeatures2 physicalDeviceFeatures{};
+	physicalDeviceFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+
+	// enable all required features:
+	// 1. device address feature
+	VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures{};
+	bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+
+	physicalDeviceFeatures.pNext = &bufferDeviceAddressFeatures;
+	physicalDeviceFeatures.features = deviceFeatures;
+
+		// const std::vector<const char*> renderdocIncomaptibleExtensions = {
+		// 	VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,	// renderdoc does not support ray tracing
+		// 	VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+		// 	VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME
+		// };
+		//
+		// // renderdoc is attached, remove the ray tracing extensions
+		// for (size_t i = 0; i < deviceExtensions.size(); i++)
+		// {
+		// 	for (size_t j = 0; j < renderdocIncomaptibleExtensions.size(); j++)
+		// 	{
+		// 		if (strcmp(deviceExtensions[i], renderdocIncomaptibleExtensions[j]) == 0)
+		// 		{
+		// 			deviceExtensions.erase(deviceExtensions.begin() + i);
+		// 			i--;
+		// 			break;
+		// 		}
+		// 	}
+		// }
+
+	vkGetPhysicalDeviceFeatures2(physicalDevice, &physicalDeviceFeatures);
+
+	VkDeviceCreateInfo createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	createInfo.pQueueCreateInfos = queueCreateInfos.data();
+	createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+	createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
+	createInfo.ppEnabledExtensionNames = deviceExtensions.data();
+	createInfo.pNext = &physicalDeviceFeatures;
+	// only backward compatibility for older devices, in newer vulkan
+	// these validation layers are not used anymore and went to the instance validation layers
+	if (enableValidationLayers)
+	{
+		createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+		createInfo.ppEnabledLayerNames = validationLayers.data();
+	}
+	else
+	{
+		createInfo.enabledLayerCount = 0;
+	}
+
+	VkResult result = vkCreateDevice(physicalDevice, &createInfo, nullptr, &device);
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Could not create Logical Device!");
+	}
+
+	std::string devName = "Logical Device for ";
+	devName += physicalDeviceProperties.properties.deviceName;
+	VulkanUtils::setDebugName(device, (uint64_t)device, VK_OBJECT_TYPE_DEVICE, devName);
+	VulkanUtils::setDebugName(device, (uint64_t)instance, VK_OBJECT_TYPE_INSTANCE,
+		"Visualize Vk Instance");
+
+
+	fetchQueues();
 }
 
 void Device::setupVma()
@@ -349,7 +450,7 @@ void Device::setupVma()
 
 	VmaAllocatorCreateInfo createInfo{};
 	createInfo.instance = instance;
-	createInfo.physicalDevice = physDevice;
+	createInfo.physicalDevice = physicalDevice;
 	createInfo.device = device;
 	createInfo.vulkanApiVersion = vulkanApiVersion;
 	createInfo.pVulkanFunctions = &vmaVkFunctions;
@@ -460,3 +561,41 @@ bool Device::areRequiredDeviceExtensionsSupported(VkPhysicalDevice device) const
 	}
 	return true;
 }
+
+void Device::enableAvailableOptionalDeviceExtensions(std::vector<const char*>& deviceExtensions, const std::map<const char*, bool>& optionalDeviceExtensions) const
+{
+	for (std::pair<const char*, bool> optionalExtension : optionalDeviceExtensions)
+	{
+		const char* extension = optionalExtension.first;
+		bool available = optionalExtension.second;
+
+		if (available)
+		{
+			deviceExtensions.push_back(extension);
+		}
+	}
+}
+
+void Device::fetchQueues()
+{
+	// queue family indices have been fetched for logical device creation,
+	// therefore they are populated here
+	// TODO: maybe IsComplete is not the best query, but right now we only need the graphics family anyway
+	assert(qfIndices.GraphicsFamily.has_value() && "Queue Family Index of Graphics Pipeline fetch"
+		" was either unsuccessful or skipped!");
+
+	// only a single queue is created, so index 0 is sufficient
+	vkGetDeviceQueue(device, qfIndices.GraphicsFamily.value(), 0, &graphicsQueue);
+
+	VulkanUtils::setDebugName(device, (uint64_t)graphicsQueue, VK_OBJECT_TYPE_QUEUE, "Graphics Queue");
+
+	if (!renderOffscreenOnly)
+	{
+		assert(qfIndices.PresentFamily.has_value() && "Queue Family Index of Present Pipeline fetch"
+			" was either unsuccessful or skipped!");
+		vkGetDeviceQueue(device, qfIndices.PresentFamily.value(), 0, &presentQueue);
+		VulkanUtils::setDebugName(device, (uint64_t)presentQueue, VK_OBJECT_TYPE_QUEUE, "Present Queue");
+	}
+}
+
+

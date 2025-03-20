@@ -4,6 +4,7 @@
 #include "volk.h"
 
 #include <optional>
+#include <string>
 #include <vector>
 
 struct SwapchainSupportDetails
@@ -40,5 +41,15 @@ bool areInstanceLayersSupported(std::vector<const char*> layers);
 bool areInstanceExtensionsAvailable(const std::vector<const char*>& requestedExtensions);
 
 bool areDeviceExtensionsAvailable(VkPhysicalDevice device, const std::vector<const char*> requestedExtensions);
+
+QueueFamilyIndices fetchQueues(VkPhysicalDevice device, VkSurfaceKHR surface);
+
+/**
+* Sets the debug name to the given vulkan object. Call it like this:
+* VisDebugNameUtils::setDebugName(Device, (uint64_t)VertexBuffer.Buffer,
+    VK_OBJECT_TYPE_BUFFER, vertBufName)
+*/
+void setDebugName(VkDevice device, uint64_t objectHandle,
+    VkObjectType objectType, const std::string& name);
 
 }
