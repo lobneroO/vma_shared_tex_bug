@@ -449,32 +449,11 @@ void Device::createLogicalDevice()
 	physicalDeviceFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 
 	// enable all required features:
-	// 1. device address feature
 	VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures{};
 	bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
 
 	physicalDeviceFeatures.pNext = &bufferDeviceAddressFeatures;
 	physicalDeviceFeatures.features = deviceFeatures;
-
-		// const std::vector<const char*> renderdocIncomaptibleExtensions = {
-		// 	VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,	// renderdoc does not support ray tracing
-		// 	VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
-		// 	VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME
-		// };
-		//
-		// // renderdoc is attached, remove the ray tracing extensions
-		// for (size_t i = 0; i < deviceExtensions.size(); i++)
-		// {
-		// 	for (size_t j = 0; j < renderdocIncomaptibleExtensions.size(); j++)
-		// 	{
-		// 		if (strcmp(deviceExtensions[i], renderdocIncomaptibleExtensions[j]) == 0)
-		// 		{
-		// 			deviceExtensions.erase(deviceExtensions.begin() + i);
-		// 			i--;
-		// 			break;
-		// 		}
-		// 	}
-		// }
 
 	vkGetPhysicalDeviceFeatures2(physicalDevice, &physicalDeviceFeatures);
 
@@ -643,16 +622,11 @@ bool Device::areRequiredDeviceExtensionsSupported(VkPhysicalDevice device) const
 	{
 		return false;
 	}
-	// disable ray tracing extension queries, if renderdoc is attached
-	// renderdoc disables them, so they can't be used
-	// if (!VisVulkanUtils::isRenderDocAttached())
-	// {
-		if (!renderOffscreenOnly 
-            && !VulkanUtils::areDeviceExtensionsAvailable(device, requiredOnScreenRenderingDeviceExtensions))
-		{
-			return false;
-		}
-	// }
+    if (!renderOffscreenOnly 
+        && !VulkanUtils::areDeviceExtensionsAvailable(device, requiredOnScreenRenderingDeviceExtensions))
+    {
+        return false;
+    }
 	
 	if (!VulkanUtils::areDeviceExtensionsAvailable(device, interopDeviceExtensions))
 	{
