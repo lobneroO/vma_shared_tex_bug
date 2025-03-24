@@ -17,6 +17,7 @@ set(SOURCE_FILE_LIST
     src/image.h
     src/image.cpp
 
+    src/handle.h
     src/string_utils.h
     src/string_utils.cpp
     src/vulkan_utils.h

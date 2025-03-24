@@ -80,6 +80,11 @@ VmaAllocator Device::getAllocator() const
     return memoryAllocator;
 }
 
+VmaPool Device::getSharedPool() const
+{
+    return imageInteropPool;
+}
+
 void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo)
 {
 	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
