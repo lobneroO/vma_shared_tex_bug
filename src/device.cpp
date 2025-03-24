@@ -44,7 +44,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 }
 }
 
-Device::Device()
+Device::Device(uint32_t deviceId /*= UINT32_MAX*/) : deviceId(deviceId)
 {
 	VkResult result = volkInitialize();
 	if (result != VK_SUCCESS)
@@ -56,6 +56,21 @@ Device::Device()
     choosePhysicalDevice();
     createLogicalDevice();
     setupVma();
+}
+
+Device::Device(bool minimal)
+{
+	// this ctor is used only for listing devices
+	// therefore we don't want to clutter the output
+	// with layer messages
+	enableValidationLayers = false;
+	VkResult result = volkInitialize();
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Could not initialize volk!");
+	}
+    setupInstance();
+    volkLoadInstance(instance);
 }
 
 Device::~Device()
@@ -83,6 +98,34 @@ VmaAllocator Device::getAllocator() const
 VmaPool Device::getSharedPool() const
 {
     return imageInteropPool;
+}
+
+std::vector<std::pair<uint32_t, std::string>> Device::getDevices()
+{
+    std::vector<std::pair<uint32_t, std::string>> devices;
+    // need an instance to query devices
+    Device d(true);
+
+	uint32_t deviceCount = 0;
+	vkEnumeratePhysicalDevices(d.instance, &deviceCount, nullptr);
+	if (deviceCount == 0)
+	{
+		throw std::runtime_error("failed to find GPUs with Vulkan support!");
+	}
+
+    std::vector<VkPhysicalDevice> physicalDevices(deviceCount);
+	vkEnumeratePhysicalDevices(d.instance, &deviceCount, physicalDevices.data());
+
+    for(uint32_t i = 0; i < deviceCount; i++)
+    {
+        VkPhysicalDevice physicalDevice = physicalDevices[i];
+        VkPhysicalDeviceProperties deviceProps;
+        vkGetPhysicalDeviceProperties(physicalDevice, &deviceProps);
+        // std::cout << "Using " << deviceProps.deviceName << std::endl;
+        devices.push_back({i, deviceProps.deviceName});
+    }
+
+    return devices;
 }
 
 void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo)
@@ -184,6 +227,64 @@ void Device::choosePhysicalDevice()
 		throw std::runtime_error("failed to find GPUs with Vulkan support!");
 	}
 
+    if(deviceId != UINT32_MAX && deviceId < deviceCount)
+    {
+        choosePhysicalDeviceById();
+    }
+    else
+    {
+        choosePhysicalDeviceByRating();
+    }
+}
+
+void Device::choosePhysicalDeviceById()
+{
+    std::cout << "choosing physical device by id" << std::endl;
+
+	uint32_t deviceCount = 0;
+	vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
+
+    if(deviceId > deviceCount -1)
+    {
+        throw std::runtime_error("Invalid device id chosen!");
+    }
+
+	std::vector<VkPhysicalDevice> devices(deviceCount);
+	// use a multimap to have a map sorted by score
+	std::multimap<uint32_t, VkPhysicalDevice> candidates;
+	vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
+
+    physicalDevice = devices[deviceId];
+	VkPhysicalDeviceProperties deviceProps;
+	vkGetPhysicalDeviceProperties(physicalDevice, &deviceProps);
+    std::cout << "Using device " 
+        + std::to_string(deviceId) + " : " + deviceProps.deviceName 
+        + " as per user request" << std::endl;
+
+    // setup similar to the one in choosing device by rating
+	physicalDeviceProperties.pNext = nullptr;
+    physicalDeviceProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+    vkGetPhysicalDeviceProperties2(physicalDevice, &physicalDeviceProperties );
+
+    VkPhysicalDeviceMemoryProperties2 memoryProps{};
+    // check that interop is actually possible
+    memoryProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2;
+    vkGetPhysicalDeviceMemoryProperties2(physicalDevice, &memoryProps);
+    memoryProperties = memoryProps.memoryProperties;
+
+    uint32_t score = ratePhysicalDevice(physicalDevice);
+    if(score == 0)
+    {
+        throw std::runtime_error("Chosen device does not support all necessary extensions!");
+    }
+}
+
+void Device::choosePhysicalDeviceByRating()
+{
+	uint32_t deviceCount = 0;
+	vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
+
+    std::cout << "choosing physical device by rating" << std::endl;
 	std::vector<VkPhysicalDevice> devices(deviceCount);
 	// use a multimap to have a map sorted by score
 	std::multimap<uint32_t, VkPhysicalDevice> candidates;
@@ -220,12 +321,6 @@ void Device::choosePhysicalDevice()
 
 		VkPhysicalDeviceProperties2 candidateProps{};
 		candidateProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-		VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtPipelineProps{};
-		rtPipelineProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
-		candidateProps.pNext = &rtPipelineProps;
-		VkPhysicalDeviceAccelerationStructurePropertiesKHR asProps{};
-		asProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR;
-		rtPipelineProps.pNext = &asProps;
 		vkGetPhysicalDeviceProperties2(candidate, &candidateProps);
 
 		if (candidate == physicalDevice)
@@ -254,7 +349,6 @@ void Device::choosePhysicalDevice()
 		}
         std::cout << logStr << std::endl;
 	}
-
 }
 
 uint32_t Device::ratePhysicalDevice(VkPhysicalDevice phyDevice) const
@@ -277,22 +371,12 @@ uint32_t Device::ratePhysicalDevice(VkPhysicalDevice phyDevice) const
 	}
 	// if the device is CPU / virtual GPU, don't improve the score
 
-	// check if the device address feature is supported, which we need for acceleration structure creation
+	// check if the device address feature is supported
 	VkPhysicalDeviceFeatures2 deviceFeatures2{};
 	deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 	VkPhysicalDeviceBufferDeviceAddressFeatures deviceAddressFeatures{};
 	deviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
 	deviceFeatures2.pNext = &deviceAddressFeatures;
-
-	// check if the ray tracing pipeline properties are supported
-	VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtPipelineFeatures{};
-	rtPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
-	deviceAddressFeatures.pNext = &rtPipelineFeatures;
-
-	// check if the acceleration structure features are supported
-	VkPhysicalDeviceAccelerationStructureFeaturesKHR asFeatures{};
-	asFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
-	rtPipelineFeatures.pNext = &asFeatures;
 
 	vkGetPhysicalDeviceFeatures2(phyDevice, &deviceFeatures2);
 
@@ -365,32 +449,11 @@ void Device::createLogicalDevice()
 	physicalDeviceFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 
 	// enable all required features:
-	// 1. device address feature
 	VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures{};
 	bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
 
 	physicalDeviceFeatures.pNext = &bufferDeviceAddressFeatures;
 	physicalDeviceFeatures.features = deviceFeatures;
-
-		// const std::vector<const char*> renderdocIncomaptibleExtensions = {
-		// 	VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,	// renderdoc does not support ray tracing
-		// 	VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
-		// 	VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME
-		// };
-		//
-		// // renderdoc is attached, remove the ray tracing extensions
-		// for (size_t i = 0; i < deviceExtensions.size(); i++)
-		// {
-		// 	for (size_t j = 0; j < renderdocIncomaptibleExtensions.size(); j++)
-		// 	{
-		// 		if (strcmp(deviceExtensions[i], renderdocIncomaptibleExtensions[j]) == 0)
-		// 		{
-		// 			deviceExtensions.erase(deviceExtensions.begin() + i);
-		// 			i--;
-		// 			break;
-		// 		}
-		// 	}
-		// }
 
 	vkGetPhysicalDeviceFeatures2(physicalDevice, &physicalDeviceFeatures);
 
@@ -559,16 +622,11 @@ bool Device::areRequiredDeviceExtensionsSupported(VkPhysicalDevice device) const
 	{
 		return false;
 	}
-	// disable ray tracing extension queries, if renderdoc is attached
-	// renderdoc disables them, so they can't be used
-	// if (!VisVulkanUtils::isRenderDocAttached())
-	// {
-		if (!renderOffscreenOnly 
-            && !VulkanUtils::areDeviceExtensionsAvailable(device, requiredOnScreenRenderingDeviceExtensions))
-		{
-			return false;
-		}
-	// }
+    if (!renderOffscreenOnly 
+        && !VulkanUtils::areDeviceExtensionsAvailable(device, requiredOnScreenRenderingDeviceExtensions))
+    {
+        return false;
+    }
 	
 	if (!VulkanUtils::areDeviceExtensionsAvailable(device, interopDeviceExtensions))
 	{

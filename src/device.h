@@ -12,15 +12,34 @@
 class Device
 {
 public:
-    Device();
+    /**
+     * Ctor. Chooses the best graphics card if no deviceId is given,
+     * otherwise choose the device with the given id
+     */
+    Device(uint32_t deviceId = UINT32_MAX);
+private:
+    /**
+     * Setup a minimal device. Only used for querying available
+     * physical devices
+     */
+public:
+    Device(bool minimal);
     ~Device();
 
     VkDevice getDevice() const;
     VmaAllocator getAllocator() const;
     VmaPool getSharedPool() const;
+
+    /**
+     * @returns a list of all device ids and their human readable names
+     */
+    static std::vector<std::pair<uint32_t, std::string>> getDevices();
+
 private:
     void setupInstance();
     void choosePhysicalDevice();
+    void choosePhysicalDeviceById();
+    void choosePhysicalDeviceByRating();
     uint32_t ratePhysicalDevice(VkPhysicalDevice device) const;
     void createLogicalDevice();
     void setupVma();
@@ -82,4 +101,6 @@ private:
 		"VK_LAYER_KHRONOS_validation"
 	};
     bool enableValidationLayers = true;
+
+    uint32_t deviceId = UINT32_MAX;
 };
