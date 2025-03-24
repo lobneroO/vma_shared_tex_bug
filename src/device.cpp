@@ -70,6 +70,21 @@ Device::~Device()
     }
 }
 
+VkDevice Device::getDevice() const
+{
+    return device;
+}
+
+VmaAllocator Device::getAllocator() const
+{
+    return memoryAllocator;
+}
+
+VmaPool Device::getSharedPool() const
+{
+    return imageInteropPool;
+}
+
 void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo)
 {
 	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -597,5 +612,4 @@ void Device::fetchQueues()
 		VulkanUtils::setDebugName(device, (uint64_t)presentQueue, VK_OBJECT_TYPE_QUEUE, "Present Queue");
 	}
 }
-
 
