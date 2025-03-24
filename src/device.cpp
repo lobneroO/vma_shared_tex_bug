@@ -2,6 +2,7 @@
 #include "device.h"
 
 #include <cassert>
+#include <cstring>
 #include <iostream>
 #include <map>
 #include <set>
@@ -146,7 +147,7 @@ void Device::setupInstance()
 {
 	if (enableValidationLayers && !VulkanUtils::areInstanceLayersSupported(validationLayers))
 	{
-		throw std::runtime_error("Validation layers requested but not available!");
+        std::cout << "Validation layers requested but not available!" << std::endl;
 	}
 
 	VkApplicationInfo appInfo{};
