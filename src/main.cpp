@@ -48,11 +48,11 @@ int main(int argc, char** argv)
 
             return 0;
         }
-    }
-    else 
-    {
-        std::cout << "There are unknown parameters. Use -h or --help for more information." << std::endl;
-        return -1;
+        else
+        {
+            std::cout << "There are unknown parameters. Use -h or --help for more information." << std::endl;
+            return -1;
+        }
     }
     Device device(id);
 

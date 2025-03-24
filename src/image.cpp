@@ -175,7 +175,6 @@ void Image::setupExternalAccess()
 	memoryFdInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
 	memoryFdInfo.memory = sharedDeviceMem;
 
-	int* externalHandle = 0;
-	VkResult result = vkGetMemoryFdKHR(device->device, &memoryFdInfo, externalHandle);
+	VkResult result = vkGetMemoryFdKHR(device->getDevice(), &memoryFdInfo, &externalHandle);
 #endif
 }
